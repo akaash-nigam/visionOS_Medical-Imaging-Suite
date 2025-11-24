@@ -89,11 +89,16 @@ struct Series: Identifiable, Codable {
 /// Represents a single DICOM image instance
 struct ImageInstance: Identifiable, Codable {
     let id: UUID
-    let sopInstanceUID: String      // DICOM (0008,0018)
-    let instanceNumber: Int?        // DICOM (0020,0013)
-    let localURL: URL?              // Path to cached DICOM file
-    let dimensions: SIMD2<Int>      // (rows, columns)
-    let pixelSpacing: SIMD2<Float>? // mm per pixel
+    let sopInstanceUID: String          // DICOM (0008,0018)
+    let instanceNumber: Int?            // DICOM (0020,0013)
+    let localURL: URL?                  // Path to cached DICOM file
+    let dimensions: SIMD2<Int>          // (rows, columns)
+    let pixelSpacing: SIMD2<Float>?     // mm per pixel
+    let imagePosition: SIMD3<Float>?    // Physical position in 3D space (mm)
+    let imageOrientation: [Float]?      // Direction cosines (6 values)
+    let sliceLocation: Float?           // Z-axis position (mm)
+    let windowCenter: Float?            // Display window center
+    let windowWidth: Float?             // Display window width
 
     init(
         id: UUID = UUID(),
@@ -101,7 +106,12 @@ struct ImageInstance: Identifiable, Codable {
         instanceNumber: Int? = nil,
         localURL: URL? = nil,
         dimensions: SIMD2<Int> = SIMD2(0, 0),
-        pixelSpacing: SIMD2<Float>? = nil
+        pixelSpacing: SIMD2<Float>? = nil,
+        imagePosition: SIMD3<Float>? = nil,
+        imageOrientation: [Float]? = nil,
+        sliceLocation: Float? = nil,
+        windowCenter: Float? = nil,
+        windowWidth: Float? = nil
     ) {
         self.id = id
         self.sopInstanceUID = sopInstanceUID
@@ -109,6 +119,31 @@ struct ImageInstance: Identifiable, Codable {
         self.localURL = localURL
         self.dimensions = dimensions
         self.pixelSpacing = pixelSpacing
+        self.imagePosition = imagePosition
+        self.imageOrientation = imageOrientation
+        self.sliceLocation = sliceLocation
+        self.windowCenter = windowCenter
+        self.windowWidth = windowWidth
+    }
+
+    /// Whether this instance has 3D positioning information
+    var hasPositionInfo: Bool {
+        imagePosition != nil || sliceLocation != nil
+    }
+
+    /// Z-coordinate from either imagePosition or sliceLocation
+    var zPosition: Float? {
+        imagePosition?.z ?? sliceLocation
+    }
+
+    /// Rows (height) from dimensions
+    var rows: Int {
+        dimensions.y
+    }
+
+    /// Columns (width) from dimensions
+    var columns: Int {
+        dimensions.x
     }
 }
 
