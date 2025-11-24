@@ -98,8 +98,10 @@ actor DICOMParserImpl: DICOMParser {
 
             offset += bytesRead
 
-            // Stop at pixel data for now (handle separately)
+            // Process pixel data separately
             if tag == DICOMTag.pixelData.rawValue {
+                // Pixel data element is already stored in dataset
+                // Continue to process any remaining elements after pixel data if needed
                 break
             }
         }
@@ -107,6 +109,215 @@ actor DICOMParserImpl: DICOMParser {
         print("✅ Parsed DICOM file: \(dataset.description())")
 
         return dataset
+    }
+
+    // MARK: - Pixel Data Extraction
+
+    /// Extract and process pixel data from a DICOM dataset
+    /// - Parameter dataset: Parsed DICOM dataset containing pixel data
+    /// - Returns: Processed pixel data ready for rendering
+    /// - Throws: DICOMError if pixel data is invalid or missing required tags
+    func extractPixelData(from dataset: DICOMDataset) throws -> ProcessedPixelData {
+        // Extract required image dimensions
+        guard let rows = dataset.rows else {
+            throw DICOMError.missingRequiredTag(.rows)
+        }
+        guard let columns = dataset.columns else {
+            throw DICOMError.missingRequiredTag(.columns)
+        }
+        guard let rawPixelData = dataset.pixelData else {
+            throw DICOMError.missingRequiredTag(.pixelData)
+        }
+
+        // Extract pixel description
+        let bitsAllocated = dataset.int(for: .bitsAllocated) ?? 16
+        let bitsStored = dataset.int(for: .bitsStored) ?? bitsAllocated
+        let highBit = dataset.int(for: .highBit) ?? (bitsStored - 1)
+        let pixelRepresentation = dataset.int(for: .pixelRepresentation) ?? 0  // 0=unsigned, 1=signed
+        let samplesPerPixel = dataset.int(for: .samplesPerPixel) ?? 1
+        let photometricInterpretation = dataset.string(for: .photometricInterpretation) ?? "MONOCHROME2"
+
+        // Extract rescale parameters (for CT Hounsfield units)
+        let rescaleSlope = dataset.rescaleSlope ?? 1.0
+        let rescaleIntercept = dataset.rescaleIntercept ?? 0.0
+
+        // Extract windowing parameters
+        let windowCenter = dataset.windowCenter ?? 40.0
+        let windowWidth = dataset.windowWidth ?? 400.0
+
+        // Extract pixel spacing (mm)
+        let pixelSpacingString = dataset.string(for: .pixelSpacing)
+        let pixelSpacing = parsePixelSpacing(pixelSpacingString) ?? SIMD2<Float>(1.0, 1.0)
+
+        // Validate pixel data size
+        let expectedSize = rows * columns * samplesPerPixel * (bitsAllocated / 8)
+        guard rawPixelData.count >= expectedSize else {
+            throw DICOMError.corruptedPixelData
+        }
+
+        // Process pixel data based on bit depth and representation
+        let processedData: Data
+        switch (bitsAllocated, pixelRepresentation, samplesPerPixel) {
+        case (8, 0, 1):
+            // 8-bit unsigned grayscale
+            processedData = processUInt8PixelData(
+                rawPixelData,
+                rows: rows,
+                columns: columns,
+                rescaleSlope: rescaleSlope,
+                rescaleIntercept: rescaleIntercept
+            )
+
+        case (16, 0, 1):
+            // 16-bit unsigned grayscale
+            processedData = try processUInt16PixelData(
+                rawPixelData,
+                rows: rows,
+                columns: columns,
+                rescaleSlope: rescaleSlope,
+                rescaleIntercept: rescaleIntercept
+            )
+
+        case (16, 1, 1):
+            // 16-bit signed grayscale (most common for CT)
+            processedData = try processInt16PixelData(
+                rawPixelData,
+                rows: rows,
+                columns: columns,
+                rescaleSlope: rescaleSlope,
+                rescaleIntercept: rescaleIntercept
+            )
+
+        case (_, _, 3):
+            // RGB color image
+            processedData = rawPixelData  // No rescaling for RGB
+
+        default:
+            throw DICOMError.invalidFormat(
+                reason: "Unsupported pixel format: \(bitsAllocated)-bit, representation=\(pixelRepresentation), samples=\(samplesPerPixel)"
+            )
+        }
+
+        return ProcessedPixelData(
+            rows: rows,
+            columns: columns,
+            bitsAllocated: bitsAllocated,
+            samplesPerPixel: samplesPerPixel,
+            pixelSpacing: pixelSpacing,
+            photometricInterpretation: photometricInterpretation,
+            windowCenter: windowCenter,
+            windowWidth: windowWidth,
+            rescaleSlope: rescaleSlope,
+            rescaleIntercept: rescaleIntercept,
+            pixelData: processedData
+        )
+    }
+
+    // MARK: - Pixel Data Processing
+
+    private func processUInt8PixelData(
+        _ data: Data,
+        rows: Int,
+        columns: Int,
+        rescaleSlope: Float,
+        rescaleIntercept: Float
+    ) -> Data {
+        // For 8-bit data, typically no rescaling needed
+        // But we'll apply it if non-default values are present
+        if rescaleSlope == 1.0 && rescaleIntercept == 0.0 {
+            return data
+        }
+
+        var processedData = Data(count: data.count)
+        for i in 0..<data.count {
+            let rawValue = Float(data[i])
+            let rescaledValue = rawValue * rescaleSlope + rescaleIntercept
+            processedData[i] = UInt8(max(0, min(255, rescaledValue)))
+        }
+
+        return processedData
+    }
+
+    private func processUInt16PixelData(
+        _ data: Data,
+        rows: Int,
+        columns: Int,
+        rescaleSlope: Float,
+        rescaleIntercept: Float
+    ) throws -> Data {
+        let pixelCount = rows * columns
+        var processedData = Data(count: pixelCount * 2)
+
+        for i in 0..<pixelCount {
+            let offset = i * 2
+            guard offset + 1 < data.count else {
+                throw DICOMError.corruptedPixelData
+            }
+
+            let rawValue = data.withUnsafeBytes { bytes in
+                bytes.load(fromByteOffset: offset, as: UInt16.self)
+            }
+
+            let rescaledValue = Float(rawValue) * rescaleSlope + rescaleIntercept
+            let finalValue = UInt16(max(0, min(65535, rescaledValue)))
+
+            processedData.withUnsafeMutableBytes { bytes in
+                bytes.storeBytes(of: finalValue, toByteOffset: offset, as: UInt16.self)
+            }
+        }
+
+        return processedData
+    }
+
+    private func processInt16PixelData(
+        _ data: Data,
+        rows: Int,
+        columns: Int,
+        rescaleSlope: Float,
+        rescaleIntercept: Float
+    ) throws -> Data {
+        // This is the most common format for CT scans
+        // Raw values are in "stored pixel values", convert to Hounsfield Units
+        let pixelCount = rows * columns
+        var processedData = Data(count: pixelCount * 2)
+
+        for i in 0..<pixelCount {
+            let offset = i * 2
+            guard offset + 1 < data.count else {
+                throw DICOMError.corruptedPixelData
+            }
+
+            let rawValue = data.withUnsafeBytes { bytes in
+                bytes.load(fromByteOffset: offset, as: Int16.self)
+            }
+
+            // Apply rescale to get Hounsfield Units (HU)
+            // HU = rawValue * rescaleSlope + rescaleIntercept
+            let hounsfieldValue = Float(rawValue) * rescaleSlope + rescaleIntercept
+
+            // Store as Int16 (typical range: -1024 to +3071 HU)
+            let finalValue = Int16(max(-32768, min(32767, hounsfieldValue)))
+
+            processedData.withUnsafeMutableBytes { bytes in
+                bytes.storeBytes(of: finalValue, toByteOffset: offset, as: Int16.self)
+            }
+        }
+
+        return processedData
+    }
+
+    private func parsePixelSpacing(_ spacingString: String?) -> SIMD2<Float>? {
+        guard let spacingString = spacingString else { return nil }
+
+        // Pixel spacing format: "row_spacing\\column_spacing" (in mm)
+        let components = spacingString.split(separator: "\\")
+        guard components.count == 2,
+              let rowSpacing = Float(components[0]),
+              let colSpacing = Float(components[1]) else {
+            return nil
+        }
+
+        return SIMD2<Float>(rowSpacing, colSpacing)
     }
 
     // MARK: - Parsing Helpers
@@ -221,5 +432,59 @@ actor DICOMParserImpl: DICOMParser {
 
         let bytesRead = currentOffset - offset
         return (element, bytesRead)
+    }
+}
+
+// MARK: - Processed Pixel Data
+
+/// Represents extracted and processed pixel data from a DICOM image
+struct ProcessedPixelData {
+    /// Image dimensions
+    let rows: Int
+    let columns: Int
+
+    /// Bits allocated per pixel (8 or 16)
+    let bitsAllocated: Int
+
+    /// Number of samples per pixel (1 for grayscale, 3 for RGB)
+    let samplesPerPixel: Int
+
+    /// Physical spacing between pixels in mm (row, column)
+    let pixelSpacing: SIMD2<Float>
+
+    /// Photometric interpretation (MONOCHROME2, RGB, etc.)
+    let photometricInterpretation: String
+
+    /// Window/Level parameters for display
+    let windowCenter: Float
+    let windowWidth: Float
+
+    /// Rescale parameters (for CT Hounsfield units)
+    let rescaleSlope: Float
+    let rescaleIntercept: Float
+
+    /// Processed pixel data ready for rendering
+    /// For 8-bit: Data contains UInt8 values
+    /// For 16-bit: Data contains Int16 or UInt16 values
+    let pixelData: Data
+
+    /// Total number of pixels
+    var pixelCount: Int {
+        rows * columns
+    }
+
+    /// Memory size in bytes
+    var dataSize: Int {
+        pixelData.count
+    }
+
+    /// Whether this is grayscale or color
+    var isGrayscale: Bool {
+        samplesPerPixel == 1
+    }
+
+    /// Whether this is CT data with Hounsfield units
+    var isCTData: Bool {
+        rescaleSlope != 1.0 || rescaleIntercept != 0.0
     }
 }
