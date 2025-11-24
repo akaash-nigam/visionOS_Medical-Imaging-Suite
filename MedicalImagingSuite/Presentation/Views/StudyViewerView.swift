@@ -16,11 +16,17 @@ struct StudyViewerView: View {
         NavigationStack {
             ZStack {
                 if let result = viewModel.importResult {
-                    // Show volume viewer
-                    VolumeView(
-                        volume: result.volume,
-                        windowLevel: viewModel.selectedWindowLevel
-                    )
+                    // Show viewer based on mode
+                    Group {
+                        if viewModel.viewMode == .volume3D {
+                            VolumeView(
+                                volume: result.volume,
+                                windowLevel: viewModel.selectedWindowLevel
+                            )
+                        } else {
+                            SliceNavigationView(volume: result.volume)
+                        }
+                    }
                     .overlay(alignment: .topLeading) {
                         studyInfoPanel(result: result)
                     }
@@ -151,6 +157,16 @@ struct StudyViewerView: View {
 
     private func controlsPanel() -> some View {
         VStack(alignment: .trailing, spacing: 16) {
+            // View mode toggle
+            Picker("View Mode", selection: $viewModel.viewMode) {
+                Label("3D", systemImage: "cube.fill")
+                    .tag(ViewMode.volume3D)
+                Label("2D", systemImage: "square.grid.2x2")
+                    .tag(ViewMode.slices2D)
+            }
+            .pickerStyle(.segmented)
+            .frame(width: 200)
+
             // Window/Level presets
             Menu {
                 ForEach(WindowLevel.allPresets, id: \.name) { preset in
@@ -185,12 +201,19 @@ struct StudyViewerView: View {
 
 // MARK: - View Model
 
+/// View mode for study viewer
+enum ViewMode {
+    case volume3D
+    case slices2D
+}
+
 @MainActor
 class StudyViewerViewModel: ObservableObject {
     @Published var importResult: DICOMImportResult?
     @Published var isImporting = false
     @Published var importProgress: String?
     @Published var selectedWindowLevel: WindowLevel = .softTissue
+    @Published var viewMode: ViewMode = .volume3D
     @Published var showFileImporter = false
     @Published var showDirectoryImporter = false
     @Published var showError = false
