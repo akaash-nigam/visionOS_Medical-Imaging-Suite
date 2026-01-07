@@ -1,0 +1,435 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="hero-ref" content="1">
+    <title>Medical Imaging Suite - Life-Size 3D Scan Visualization | visionOS</title>
+    <meta name="description" content="View patient scans at life-size scale, compare modalities in 3D space, and plan surgeries with precision. Built for radiologists and surgeons on Vision Pro.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --scan-blue: #3b82f6;
+            --ct-orange: #f97316;
+            --mri-purple: #a855f7;
+            --tissue-red: #ef4444;
+            --xray-cyan: #06b6d4;
+            --medical-dark: #020617;
+            --imaging-slate: #0f172a;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'Manrope', sans-serif;
+            background: var(--medical-dark);
+            color: #e2e8f0;
+            overflow-x: hidden;
+            line-height: 1.7;
+        }
+
+        /* Scan Lines Animation */
+        .scan-lines {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+            overflow: hidden;
+        }
+
+        .scan-line {
+            position: absolute;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(90deg, transparent 0%, var(--scan-blue) 50%, transparent 100%);
+            animation: scanDown 3s linear infinite;
+            opacity: 0.4;
+        }
+
+        @keyframes scanDown {
+            0% { top: -10%; opacity: 0; }
+            10% { opacity: 0.4; }
+            90% { opacity: 0.4; }
+            100% { top: 110%; opacity: 0; }
+        }
+
+        /* Hero */
+        .hero {
+            position: relative;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+        }
+
+        .hero-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('hero-spatial.png') center/cover no-repeat;
+            opacity: 0.35;
+        }
+
+        .hero-bg::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(180deg, rgba(2, 6, 23, 0.7) 0%, transparent 30%, var(--medical-dark) 100%);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 3;
+            text-align: center;
+            max-width: 900px;
+            padding: 2rem;
+        }
+
+        .imaging-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            padding: 0.6rem 1.5rem;
+            border-radius: 50px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--scan-blue);
+            margin-bottom: 2rem;
+        }
+
+        .hero h1 {
+            font-size: clamp(2.5rem, 5vw, 4rem);
+            font-weight: 800;
+            line-height: 1.15;
+            margin-bottom: 1.5rem;
+            color: #fff;
+        }
+
+        .hero h1 span {
+            background: linear-gradient(135deg, var(--scan-blue), var(--xray-cyan));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .hero p {
+            font-size: 1.15rem;
+            color: #94a3b8;
+            margin-bottom: 2.5rem;
+            max-width: 700px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .cta-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: linear-gradient(135deg, var(--scan-blue), var(--mri-purple));
+            color: white;
+            padding: 1rem 2.5rem;
+            border-radius: 12px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 40px rgba(59, 130, 246, 0.3);
+        }
+
+        .cta-button:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 15px 50px rgba(59, 130, 246, 0.4);
+        }
+
+        /* Modalities */
+        .modalities {
+            position: relative;
+            padding: 5rem 2rem;
+            background: var(--imaging-slate);
+            z-index: 2;
+        }
+
+        .modalities-grid {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .modality-card {
+            background: rgba(59, 130, 246, 0.08);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            border-radius: 16px;
+            padding: 2rem;
+            text-align: center;
+            flex: 1;
+            min-width: 150px;
+            max-width: 180px;
+            transition: all 0.3s ease;
+        }
+
+        .modality-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .modality-icon { font-size: 2.5rem; margin-bottom: 1rem; }
+        .modality-card h4 { font-size: 1.1rem; font-weight: 700; color: #fff; }
+        .modality-card p { font-size: 0.8rem; color: #64748b; margin-top: 0.5rem; }
+
+        /* Features */
+        .features {
+            position: relative;
+            padding: 6rem 2rem;
+            background: var(--medical-dark);
+            z-index: 2;
+        }
+
+        .section-header {
+            text-align: center;
+            max-width: 700px;
+            margin: 0 auto 4rem;
+        }
+
+        .section-header h2 {
+            font-size: clamp(2rem, 4vw, 2.8rem);
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: #fff;
+        }
+
+        .section-header p {
+            font-size: 1.1rem;
+            color: #94a3b8;
+        }
+
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+            gap: 2rem;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .feature-card {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.08), rgba(15, 23, 42, 0.5));
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            border-radius: 20px;
+            padding: 2.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: rgba(59, 130, 246, 0.3);
+        }
+
+        .feature-icon {
+            width: 56px;
+            height: 56px;
+            background: linear-gradient(135deg, var(--scan-blue), var(--mri-purple));
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .feature-card h3 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.75rem; color: #fff; }
+        .feature-card p { font-size: 0.95rem; color: #94a3b8; }
+
+        /* Compliance */
+        .compliance {
+            position: relative;
+            padding: 5rem 2rem;
+            background: var(--imaging-slate);
+            z-index: 2;
+            text-align: center;
+        }
+
+        .compliance-badges {
+            display: flex;
+            gap: 1.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 2rem;
+        }
+
+        .compliance-badge {
+            background: rgba(59, 130, 246, 0.1);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            padding: 1rem 1.5rem;
+            border-radius: 12px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--scan-blue);
+        }
+
+        /* Footer */
+        .footer-cta {
+            position: relative;
+            padding: 6rem 2rem;
+            background: var(--medical-dark);
+            text-align: center;
+            z-index: 2;
+        }
+
+        .footer-cta h2 { font-size: clamp(2rem, 4vw, 2.8rem); font-weight: 700; margin-bottom: 1rem; color: #fff; }
+        .footer-cta p { font-size: 1.1rem; color: #94a3b8; margin-bottom: 2rem; max-width: 600px; margin-left: auto; margin-right: auto; }
+
+        .platform-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.75rem;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            color: #64748b;
+            font-size: 0.95rem;
+        }
+
+        .platform-badge svg { width: 24px; height: 24px; }
+
+        footer {
+            padding: 3rem 2rem;
+            text-align: center;
+            background: var(--medical-dark);
+            border-top: 1px solid rgba(59, 130, 246, 0.1);
+            color: #475569;
+            font-size: 0.9rem;
+            z-index: 2;
+        }
+    </style>
+</head>
+<body>
+    <div class="scan-lines">
+        <div class="scan-line" style="animation-delay: 0s;"></div>
+        <div class="scan-line" style="animation-delay: 1s;"></div>
+        <div class="scan-line" style="animation-delay: 2s;"></div>
+    </div>
+
+    <section class="hero">
+        <div class="hero-bg"></div>
+        <div class="hero-content">
+            <div class="imaging-badge">Diagnostic Imaging Platform</div>
+            <h1>Medical <span>Imaging Suite</span></h1>
+            <p>View patient scans at life-size scale, compare imaging modalities in 3D space, and plan surgeries with precision on Apple Vision Pro.</p>
+            <a href="#" class="cta-button">
+                <span>Request Demo</span>
+                <span>&rarr;</span>
+            </a>
+        </div>
+    </section>
+
+    <section class="modalities">
+        <div class="modalities-grid">
+            <div class="modality-card">
+                <div class="modality-icon">&#129659;</div>
+                <h4>CT Scans</h4>
+                <p>3D volumetric reconstruction</p>
+            </div>
+            <div class="modality-card">
+                <div class="modality-icon">&#129656;</div>
+                <h4>MRI</h4>
+                <p>Soft tissue visualization</p>
+            </div>
+            <div class="modality-card">
+                <div class="modality-icon">&#128248;</div>
+                <h4>X-Ray</h4>
+                <p>Bone structure analysis</p>
+            </div>
+            <div class="modality-card">
+                <div class="modality-icon">&#128172;</div>
+                <h4>Ultrasound</h4>
+                <p>Real-time imaging</p>
+            </div>
+            <div class="modality-card">
+                <div class="modality-icon">&#128142;</div>
+                <h4>PET Scans</h4>
+                <p>Metabolic activity</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="features">
+        <div class="section-header">
+            <h2>Visualization Capabilities</h2>
+            <p>Transform how you interact with medical imaging data in spatial computing.</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">&#129490;</div>
+                <h3>Life-Size Visualization</h3>
+                <p>View scans at actual anatomical scale. Walk around and examine structures from any angle in 3D space.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128209;</div>
+                <h3>Side-by-Side Comparison</h3>
+                <p>Display multiple scans simultaneously in space. Compare modalities and time series effortlessly.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#9986;</div>
+                <h3>Surgical Planning</h3>
+                <p>Draw, measure, and annotate directly on 3D models. Plan procedures with precision.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#127760;</div>
+                <h3>Global Collaboration</h3>
+                <p>Multi-user sessions with specialists worldwide. Share spatial environments in real-time.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#129302;</div>
+                <h3>AI-Assisted Analysis</h3>
+                <p>Automated detection, segmentation, and quantification powered by machine learning.</p>
+            </div>
+            <div class="feature-card">
+                <div class="feature-icon">&#128190;</div>
+                <h3>PACS Integration</h3>
+                <p>Seamless connection with hospital imaging systems. Import directly from your workflow.</p>
+            </div>
+        </div>
+    </section>
+
+    <section class="compliance">
+        <h2 style="color: #fff;">Healthcare Compliance Ready</h2>
+        <p style="color: #94a3b8; margin-top: 0.5rem;">FDA-cleared and built for clinical environments.</p>
+        <div class="compliance-badges">
+            <div class="compliance-badge">FDA 510(k)</div>
+            <div class="compliance-badge">HIPAA</div>
+            <div class="compliance-badge">DICOM 3.0</div>
+            <div class="compliance-badge">IHE Profiles</div>
+            <div class="compliance-badge">SOC 2</div>
+        </div>
+    </section>
+
+    <section class="footer-cta">
+        <h2>Ready to Transform Diagnostics?</h2>
+        <p>Join leading hospitals and radiology practices using spatial imaging for better patient outcomes.</p>
+        <div class="platform-badge">
+            <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+            <span>Built for Apple Vision Pro</span>
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2025 Medical Imaging Suite. Spatial Diagnostics for Better Care.</p>
+    </footer>
+</body>
+</html>

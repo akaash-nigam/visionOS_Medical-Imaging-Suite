@@ -1,0 +1,554 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Medical Imaging Suite - Spatial Computing for Vision Pro</title>
+    <meta name="description" content="Step inside MRI, CT, and PET scans at true scale. Examine anatomy from every angle, collaborate with specialists in shared space, and revolutionize medical imaging analysis.">
+    <meta name="keywords" content="visionOS, Vision Pro, Spatial Computing, Medical Imaging Suite, 3D Interface, Mixed Reality">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #f0f0f0;
+            background: #0a0a0f;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .bg-layer {
+            position: fixed;
+            width: 100%;
+            height: 100%;
+            top: 0;
+            left: 0;
+            pointer-events: none;
+        }
+
+        .bg-layer-1 {
+            background: radial-gradient(circle at 20% 30%, rgba(20, 184, 166, 0.15) 0%, transparent 50%);
+            z-index: 1;
+        }
+
+        .bg-layer-2 {
+            background: radial-gradient(circle at 80% 70%, rgba(45, 212, 191, 0.1) 0%, transparent 50%);
+            z-index: 2;
+        }
+
+        .bg-layer-3 {
+            background: linear-gradient(180deg, transparent 0%, rgba(20, 184, 166, 0.05) 100%);
+            z-index: 3;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 40px 20px;
+            position: relative;
+            z-index: 10;
+        }
+
+        header {
+            text-align: center;
+            padding: 80px 20px;
+            position: relative;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            padding: 8px 20px;
+            background: rgba(20, 184, 166, 0.15);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(20, 184, 166, 0.3);
+            border-radius: 20px;
+            font-size: 14px;
+            color: #2dd4bf;
+            font-weight: 500;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 30px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+        }
+
+        .logo-container {
+            perspective: 1000px;
+            margin-bottom: 40px;
+        }
+
+        .logo-icon {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(135deg, rgba(20, 184, 166, 0.8) 0%, rgba(45, 212, 191, 0.6) 100%);
+            backdrop-filter: blur(20px);
+            border: 2px solid rgba(45, 212, 191, 0.2);
+            border-radius: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 54px;
+            font-weight: 800;
+            color: #ffffff;
+            margin: 0 auto;
+            box-shadow:
+                0 20px 60px rgba(20, 184, 166, 0.4),
+                0 0 80px rgba(20, 184, 166, 0.2),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            letter-spacing: -3px;
+            transform-style: preserve-3d;
+            animation: rotateY 8s ease-in-out infinite;
+        }
+
+        @keyframes rotateY {
+            0%, 100% { transform: rotateY(-5deg) rotateX(2deg); }
+            50% { transform: rotateY(5deg) rotateX(-2deg); }
+        }
+
+        h1 {
+            font-size: 68px;
+            font-weight: 800;
+            background: linear-gradient(135deg, #ffffff 0%, #2dd4bf 50%, #14b8a6 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 24px;
+            line-height: 1.1;
+            letter-spacing: -2px;
+        }
+
+        .tagline {
+            font-size: 28px;
+            color: #b5a3e8;
+            margin-bottom: 20px;
+            font-weight: 400;
+            max-width: 800px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .spatial-message {
+            font-size: 18px;
+            color: #9388db;
+            font-weight: 300;
+            max-width: 700px;
+            margin: 0 auto 50px;
+            line-height: 1.8;
+        }
+
+        .cta-buttons {
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-bottom: 80px;
+        }
+
+        .btn {
+            padding: 20px 48px;
+            font-size: 18px;
+            font-weight: 600;
+            border: none;
+            border-radius: 16px;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #14b8a6 0%, #2dd4bf 100%);
+            color: #ffffff;
+            box-shadow:
+                0 8px 30px rgba(20, 184, 166, 0.4),
+                0 0 60px rgba(20, 184, 166, 0.2);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow:
+                0 12px 40px rgba(20, 184, 166, 0.6),
+                0 0 80px rgba(20, 184, 166, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(20, 184, 166, 0.1);
+            backdrop-filter: blur(10px);
+            color: #2dd4bf;
+            border: 2px solid rgba(20, 184, 166, 0.3);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(20, 184, 166, 0.2);
+            border-color: rgba(20, 184, 166, 0.5);
+            transform: translateY(-3px);
+        }
+
+        .spatial-pillars {
+            padding: 100px 20px;
+            position: relative;
+        }
+
+        .spatial-pillars h2 {
+            text-align: center;
+            font-size: 52px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 20px;
+            letter-spacing: -1px;
+        }
+
+        .spatial-subtitle {
+            text-align: center;
+            font-size: 22px;
+            color: #9388db;
+            margin-bottom: 80px;
+            font-weight: 300;
+        }
+
+        .pillars-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 40px;
+            margin-bottom: 80px;
+        }
+
+        .pillar-card {
+            background: rgba(30, 27, 75, 0.4);
+            backdrop-filter: blur(20px);
+            padding: 48px;
+            border-radius: 24px;
+            border: 1px solid rgba(20, 184, 166, 0.2);
+            box-shadow:
+                0 8px 32px rgba(0, 0, 0, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.05);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .pillar-card::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle, rgba(20, 184, 166, 0.1) 0%, transparent 70%);
+            opacity: 0;
+            transition: opacity 0.4s;
+        }
+
+        .pillar-card:hover {
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(20, 184, 166, 0.4);
+            box-shadow:
+                0 16px 48px rgba(20, 184, 166, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .pillar-card:hover::before {
+            opacity: 1;
+        }
+
+        .pillar-icon {
+            width: 70px;
+            height: 70px;
+            background: linear-gradient(135deg, rgba(20, 184, 166, 0.3) 0%, rgba(45, 212, 191, 0.2) 100%);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(20, 184, 166, 0.3);
+            border-radius: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            margin-bottom: 28px;
+            box-shadow: 0 8px 24px rgba(20, 184, 166, 0.2);
+        }
+
+        .pillar-card h3 {
+            font-size: 26px;
+            margin-bottom: 16px;
+            color: #2dd4bf;
+            font-weight: 700;
+            letter-spacing: -0.5px;
+        }
+
+        .pillar-card p {
+            color: #b5a3e8;
+            line-height: 1.8;
+            font-size: 17px;
+            font-weight: 300;
+        }
+
+        .experience-section {
+            padding: 100px 20px;
+            background: linear-gradient(135deg, rgba(30, 27, 75, 0.3) 0%, rgba(76, 29, 149, 0.2) 100%);
+            backdrop-filter: blur(20px);
+            border-radius: 32px;
+            margin: 60px 0;
+            border: 1px solid rgba(20, 184, 166, 0.2);
+        }
+
+        .experience-section h2 {
+            text-align: center;
+            font-size: 52px;
+            font-weight: 800;
+            color: #ffffff;
+            margin-bottom: 80px;
+            letter-spacing: -1px;
+        }
+
+        .experience-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 36px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .experience-item {
+            text-align: center;
+        }
+
+        .experience-frame {
+            background: rgba(55, 48, 163, 0.3);
+            backdrop-filter: blur(15px);
+            border-radius: 24px;
+            padding: 24px;
+            aspect-ratio: 16 / 9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow:
+                0 12px 40px rgba(0, 0, 0, 0.4),
+                inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+            border: 2px solid rgba(20, 184, 166, 0.25);
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .experience-frame:hover {
+            transform: translateY(-6px);
+            border-color: rgba(20, 184, 166, 0.5);
+            box-shadow:
+                0 20px 60px rgba(20, 184, 166, 0.3),
+                inset 0 1px 0 rgba(255, 255, 255, 0.15);
+        }
+
+        .experience-placeholder {
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, rgba(30, 27, 75, 0.6) 0%, rgba(49, 46, 129, 0.4) 100%);
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #14b8a6;
+            font-size: 56px;
+            font-weight: 200;
+        }
+
+        .experience-label {
+            color: #ddd6fe;
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: -0.3px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 80px 20px 60px;
+            color: #9388db;
+        }
+
+        footer p {
+            margin-bottom: 24px;
+            font-size: 17px;
+            font-weight: 300;
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 40px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 40px;
+        }
+
+        .footer-links a {
+            color: #2dd4bf;
+            text-decoration: none;
+            font-size: 17px;
+            font-weight: 500;
+            transition: all 0.3s;
+        }
+
+        .footer-links a:hover {
+            color: #ffffff;
+        }
+
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 44px;
+            }
+
+            .tagline {
+                font-size: 22px;
+            }
+
+            .spatial-pillars h2,
+            .experience-section h2 {
+                font-size: 36px;
+            }
+
+            .btn {
+                padding: 16px 36px;
+                font-size: 16px;
+            }
+
+            .pillar-card {
+                padding: 36px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-layer bg-layer-1"></div>
+    <div class="bg-layer bg-layer-2"></div>
+    <div class="bg-layer bg-layer-3"></div>
+
+    <div class="container">
+        <header>
+            <div class="hero-badge">Build for Apple Vision Pro</div>
+            <div class="logo-container">
+                <div class="logo-icon">MI</div>
+            </div>
+            <h1>Medical Imaging Suite</h1>
+            <p class="tagline">Analyze Medical Scans in Spatial 3D</p>
+            <p class="spatial-message">
+                Step inside MRI, CT, and PET scans at true scale. Examine anatomy from every angle, collaborate with specialists in shared space, and revolutionize medical imaging analysis.
+            </p>
+            <div class="cta-buttons">
+                <a href="#" class="btn btn-primary">
+                    <span>Download for Vision Pro</span>
+                </a>
+                <a href="#features" class="btn btn-secondary">
+                    <span>Explore Spatial Features</span>
+                </a>
+            </div>
+        </header>
+
+        <section class="spatial-pillars" id="features">
+            <h2>Spatial Computing Reimagined</h2>
+            <p class="spatial-subtitle">Five pillars of immersive spatial experience</p>
+
+            <div class="pillars-grid">
+                <div class="pillar-card">
+                    <div class="pillar-icon">🫀</div>
+                    <h3>True 3D Anatomy</h3>
+                    <p>View organs, vessels, tumors in full spatial 3D. Walk around, zoom in, see from angles impossible on flat screens.</p>
+                </div>
+
+                <div class="pillar-card">
+                    <div class="pillar-icon">📏</div>
+                    <h3>Precise Measurements</h3>
+                    <p>Measure lesions, distances, volumes with spatial precision. Hand gestures for sub-millimeter accuracy.</p>
+                </div>
+
+                <div class="pillar-card">
+                    <div class="pillar-icon">👥</div>
+                    <h3>Specialist Collaboration</h3>
+                    <p>Multiple doctors examine same scan together in shared 3D space. Point, annotate, discuss in real-time.</p>
+                </div>
+
+                <div class="pillar-card">
+                    <div class="pillar-icon">🔬</div>
+                    <h3>Layer Isolation</h3>
+                    <p>Toggle MRI sequences, CT phases, PET overlays with gestures. See specific tissues or pathology isolated in 3D.</p>
+                </div>
+
+                <div class="pillar-card">
+                    <div class="pillar-icon">📊</div>
+                    <h3>Integrated Patient Data</h3>
+                    <p>Historical scans, lab results, vitals float beside current imaging. Complete patient picture in spatial view.</p>
+                </div>
+
+            </div>
+        </section>
+
+        <section class="experience-section">
+            <h2>Experience in Spatial Reality</h2>
+            <div class="experience-grid">
+                <div class="experience-item">
+                    <div class="experience-frame">
+                        <div class="experience-placeholder">∞</div>
+                    </div>
+                    <div class="experience-label">Spatial View</div>
+                </div>
+
+                <div class="experience-item">
+                    <div class="experience-frame">
+                        <div class="experience-placeholder">◇</div>
+                    </div>
+                    <div class="experience-label">Gesture Control</div>
+                </div>
+
+                <div class="experience-item">
+                    <div class="experience-frame">
+                        <div class="experience-placeholder">⚡</div>
+                    </div>
+                    <div class="experience-label">Real-Time</div>
+                </div>
+
+                <div class="experience-item">
+                    <div class="experience-frame">
+                        <div class="experience-placeholder">🌊</div>
+                    </div>
+                    <div class="experience-label">Immersive Mode</div>
+                </div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Medical Imaging Suite — Spatial Computing for Vision Pro</p>
+            <p>&copy; 2024 Medical Imaging Suite. Designed for the spatial computing era.</p>
+            <div class="footer-links">
+                <a href="#">Privacy Policy</a>
+                <a href="#">Documentation</a>
+                <a href="#">Developer API</a>
+                <a href="#">Support</a>
+            </div>
+        </footer>
+    </div>
+</body>
+</html>
